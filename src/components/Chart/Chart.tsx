@@ -100,9 +100,13 @@ export class Chart extends React.Component<TProps, TState> {
   }
 
   private getColorFromSlope = (slope: number) => {
+    if (slope > 13) {
+      return 'rgba(0, 0, 0, 0.8)';
+    }
     if (slope > 10) {
       return 'rgba(255, 0, 0, 0.6)';
-    } else if (slope < 4) {
+    }
+    if (slope < 4) {
       return 'rgba(28, 168, 0, 0.6)';
     }
 
