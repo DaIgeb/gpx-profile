@@ -38,8 +38,22 @@ export class Chart extends React.Component<TProps, TState> {
         this.initializeChart(nextProps);
       } else {
         // Update chart
+        if (chart.data && chart.data.datasets && nextState.coords.length > 0) {
+          const courseDistance = nextState.coords[nextState.coords.length - 1].totalDistance;
+          if (this.canvas) {
+            const ctx = this.canvas.getContext('2d');
+            if (ctx) {
+              var gradientFill = ctx.createLinearGradient(ctx.canvas.width, 0, 0, 0);
+              nextState.coords.forEach(coord => {
+                if (coord.slope) {
+                  gradientFill.addColorStop(coord.totalDistance / courseDistance, this.getColorFromSlope(coord.slope));
+                }
+              });
 
-        if (chart.data && chart.data.datasets) {
+              chart.data.datasets[0].backgroundColor = gradientFill;
+              chart.data.datasets[0].borderColor = gradientFill;
+            }
+          }
           chart.data.labels = nextState.coords.map(c => c.totalDistance.toFixed(2));
           chart.data.datasets[0].data = nextState.coords.map(c => c.altitude || 0);
         }
@@ -66,6 +80,7 @@ export class Chart extends React.Component<TProps, TState> {
               <td>Altitude</td>
               <td>Slope</td>
               <td>Distance</td>
+              <td>Total Distance</td>
             </tr>
           </thead>
           <tbody>
@@ -75,12 +90,23 @@ export class Chart extends React.Component<TProps, TState> {
               <td>{c.altitude !== undefined ? c.altitude.toFixed(0) : 'none'}</td>
               <td>{c.slope !== undefined ? c.slope.toFixed(1) : 'none'}</td>
               <td>{c.distance}</td>
+              <td>{c.totalDistance}</td>
             </tr>)}
           </tbody>
         </table>
         }
       </div>
     );
+  }
+
+  private getColorFromSlope = (slope: number) => {
+    if (slope > 10) {
+      return 'rgba(255, 0, 0, 0.6)';
+    } else if (slope < 4) {
+      return 'rgba(28, 168, 0, 0.6)';
+    }
+
+    return 'rgba(255, 255, 0, 0.6)';
   }
 
   private initializeChart = (nextProps: TProps) => {
@@ -91,11 +117,11 @@ export class Chart extends React.Component<TProps, TState> {
         const data = validData.map(c => c.altitude || 0);
         const labels = validData.map(c => c.totalDistance.toFixed(2));
 
-        var gradientStroke = ctx.createLinearGradient(500, 0, 100, 0);
+        const gradientStroke = ctx.createLinearGradient(500, 0, 100, 0);
         gradientStroke.addColorStop(0, '#80b6f4');
         gradientStroke.addColorStop(1, '#f49080');
 
-        var gradientFill = ctx.createLinearGradient(500, 0, 100, 0);
+        const gradientFill = ctx.createLinearGradient(500, 0, 100, 0);
         gradientFill.addColorStop(0, 'rgba(128, 182, 244, 0.6)');
         gradientFill.addColorStop(0.25, 'rgba(244, 144, 128, 0.6)');
         gradientFill.addColorStop(0.5, 'rgba(128, 182, 244, 0.6)');
@@ -109,11 +135,8 @@ export class Chart extends React.Component<TProps, TState> {
               labels: labels,
               datasets: [{
                 borderColor: gradientStroke,
-                pointBorderColor: gradientStroke,
-                pointBackgroundColor: gradientStroke,
-                pointHoverBackgroundColor: gradientStroke,
-                pointHoverBorderColor: gradientStroke,
                 backgroundColor: gradientFill,
+                pointRadius: 0,
                 data: data,
                 label: 'Altitude',
                 fill: true
