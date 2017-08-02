@@ -7,6 +7,8 @@ type TProps = {
 };
 type TState = { coords: TCoords[]; chart?: ChartJs; };
 
+const defaultThreshold = 0.1;
+
 export class Chart extends React.Component<TProps, TState> {
   private fileInput: HTMLInputElement | null;
   private thresholdInput: HTMLInputElement | null;
@@ -33,15 +35,15 @@ export class Chart extends React.Component<TProps, TState> {
         if (this.canvas) {
           const ctx = this.canvas.getContext('2d');
           if (ctx) {
-            const gradientFill = ctx.createLinearGradient(ctx.canvas.width, 0, 0, 0);
+            const gradientFill = ctx.createLinearGradient(0, 0, ctx.canvas.width, 0);
             nextState.coords.forEach(coord => {
-              if (coord.slope) {
+              if (coord.slope !== undefined) {
                 gradientFill.addColorStop(coord.totalDistance / courseDistance, this.getColorFromSlope(coord.slope));
               }
             });
 
             chart.data.datasets[0].backgroundColor = gradientFill;
-            chart.data.datasets[0].borderColor = gradientFill;
+            // chart.data.datasets[0].borderColor = gradientFill;
           }
         }
         chart.data.labels = nextState.coords.map(c => c.totalDistance.toFixed(2));
@@ -58,7 +60,13 @@ export class Chart extends React.Component<TProps, TState> {
     return (
       <div>
         <input type="file" ref={(ele) => this.fileInput = ele} />
-        <input type="number" ref={(ele) => this.thresholdInput = ele} defaultValue="0.5" />
+        <input
+          type="number"
+          ref={(ele) => this.thresholdInput = ele}
+          step={0.05}
+          min={0}
+          defaultValue={defaultThreshold.toFixed(2)}
+        />
         <button onClick={this.loadFile}>Load</button>
         <div style={{ width: '100%', height: '800px' }}>
           <canvas id="myChart" ref={(ele) => this.canvas = ele} />
@@ -75,7 +83,10 @@ export class Chart extends React.Component<TProps, TState> {
             </tr>
           </thead>
           <tbody>
-            {this.state.coords.map((c, idx) => <tr key={idx}>
+            {this.state.coords.map((c, idx) => <tr
+              key={idx}
+              style={{ backgroundColor: c.slope !== undefined ? this.getColorFromSlope(c.slope) : '#FFFFFF' }}
+            >
               <td>{c.lat.toFixed(4)}</td>
               <td>{c.long.toFixed(4)}</td>
               <td>{c.altitude !== undefined ? c.altitude.toFixed(0) : 'none'}</td>
@@ -91,17 +102,34 @@ export class Chart extends React.Component<TProps, TState> {
   }
 
   private getColorFromSlope = (slope: number) => {
-    if (slope > 13) {
-      return 'rgba(0, 0, 0, 0.8)';
-    }
-    if (slope > 10) {
-      return 'rgba(255, 0, 0, 0.6)';
-    }
-    if (slope < 4) {
-      return 'rgba(28, 168, 0, 0.6)';
-    }
+    const bounds = [
+      { bound: 13, hue: 0, saturation: 0, lightness: 0 },
+      { bound: 12, hue: 0, saturation: 100, lightness: 50 },
+      { bound: 10, hue: 0, saturation: 100, lightness: 50 },
+      { bound: 7, hue: 60, saturation: 100, lightness: 50 },
+      { bound: 3, hue: 60, saturation: 100, lightness: 50 },
+      { bound: 0, hue: 110, saturation: 100, lightness: 50 }
+    ];
 
-    return 'rgba(255, 255, 0, 0.6)';
+    const boundIndex = bounds.findIndex(b => b.bound < slope);
+    if (boundIndex !== -1) {
+      if (boundIndex > 0) {
+        const upperBound = bounds[boundIndex - 1];
+        const lowerBound = bounds[boundIndex];
+        const factor = (slope - lowerBound.bound) / (upperBound.bound - lowerBound.bound);
+        const hue = factor * (lowerBound.hue - upperBound.hue) + upperBound.hue;
+        const saturation = factor * (lowerBound.saturation - upperBound.saturation) + upperBound.saturation;
+        const lightness = factor * (lowerBound.lightness - upperBound.lightness) + upperBound.lightness;
+
+        return `hsla(${hue}, ${saturation}%, ${lightness}%, 0.6)`;
+      }
+
+      const bound = bounds[boundIndex];
+      return `hsla(${bound.hue}, ${bound.saturation}%, ${bound.lightness}%, 0.6)`;
+    } else {
+      const lastBound = bounds[bounds.length - 1];
+      return `hsla(${lastBound.hue}, ${lastBound.saturation}%, ${lastBound.lightness}%, 0.6)`;
+    }
   }
 
   private initializeChart = (nextProps: TProps, nextState: TState) => {
@@ -113,7 +141,7 @@ export class Chart extends React.Component<TProps, TState> {
         const labels = validData.map(c => c.totalDistance.toFixed(2));
 
         const gradientFill = ctx.createLinearGradient(500, 0, 100, 0);
-        
+
         const chart = new ChartJs(
           ctx,
           {
@@ -121,8 +149,9 @@ export class Chart extends React.Component<TProps, TState> {
             data: {
               labels: labels,
               datasets: [{
-                borderColor: gradientFill,
+                borderColor: 'transparent',
                 backgroundColor: gradientFill,
+                borderWidth: 0,
                 pointRadius: 0,
                 data: data,
                 label: 'Altitude',
@@ -133,7 +162,6 @@ export class Chart extends React.Component<TProps, TState> {
               legend: {
                 display: false
               },
-              responsive: false,
               maintainAspectRatio: false
             }
           }
@@ -147,7 +175,7 @@ export class Chart extends React.Component<TProps, TState> {
     if (this.fileInput && this.fileInput.files && this.fileInput.files.length > 0) {
       const receivedText = () => {
         const result = fr.result;
-        
+
         const coords = smoothenCoordinates(result, this.thresholdInput ? parseFloat(this.thresholdInput.value) : 0.5);
         this.setState({ coords });
       };
