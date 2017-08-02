@@ -147,6 +147,9 @@ export class Chart extends React.Component<TProps, TState> {
               }]
             },
             options: {
+              legend: {
+                display: false
+              },
               responsive: false,
               maintainAspectRatio: false
             }
