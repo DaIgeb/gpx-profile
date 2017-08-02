@@ -119,7 +119,7 @@ export class Chart extends React.Component<TProps, TState> {
         }
         <div className={contentType === 'profile' ? classes.chart : classes.hidden} >
           <canvas id="myChart" ref={(ele) => this.canvas = ele} />
-          <Gradient bounds={bounds} onChange={(bds) => this.setState({ bounds: bds })} />}
+          <Gradient bounds={bounds} onChange={(bds) => this.setState({ bounds: bds })} />
         </div>
       </div>
     );
