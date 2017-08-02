@@ -2,10 +2,26 @@ import * as React from 'react';
 import * as ChartJs from 'chart.js';
 
 import { smoothenCoordinates, TCoords } from './smooth';
+import { Gradient, TBound } from './Gradient';
+
+const classes = require<{
+  chart: string;
+  preview: string;
+  hidden: string;
+}>('./Chart.css');
 
 type TProps = {};
-type TState = { coords: TCoords[]; chart?: ChartJs; };
+type TState = { coords: TCoords[]; chart?: ChartJs; showCoords: boolean; contentType: string; bounds: TBound[] };
 const defaultThreshold = 0.1;
+const defaultBounds: TBound[] = [
+  { bound: 13, hue: 0, saturation: 0, lightness: 0 },
+  { bound: 12, hue: 0, saturation: 100, lightness: 50 },
+  { bound: 10, hue: 0, saturation: 100, lightness: 50 },
+  { bound: 8, hue: 40, saturation: 100, lightness: 50 },
+  { bound: 5, hue: 60, saturation: 100, lightness: 50 },
+  { bound: 1, hue: 80, saturation: 100, lightness: 50 },
+  { bound: 0, hue: 110, saturation: 100, lightness: 50 }
+];
 
 export class Chart extends React.Component<TProps, TState> {
   private fileInput: HTMLInputElement | null;
@@ -15,7 +31,7 @@ export class Chart extends React.Component<TProps, TState> {
   constructor(props: TProps) {
     super(props);
 
-    this.state = { coords: [] };
+    this.state = { coords: [], showCoords: true, contentType: 'profile', bounds: defaultBounds };
   }
 
   componentWillUnmount() {
@@ -28,11 +44,27 @@ export class Chart extends React.Component<TProps, TState> {
   componentWillUpdate(nextProps: TProps, nextState: TState) {
     const chart = nextState.chart;
     if (!chart) {
-      this.initializeChart(nextState);
+      this.initializeChart();
+      this.assignData(nextState);
+    } else {
+      if (this.state.bounds !== nextState.bounds || this.state.coords !== nextState.coords) {
+        this.assignData(nextState);
+      }
+    }
+  }
+
+  componentDidUpdate(nextProps: TProps, nextState: TState) {
+    const chart = nextState.chart;
+    if (chart) {
+      if (this.state.contentType !== nextState.contentType) {
+        chart.resize();
+        chart.update();
+      }
     }
   }
 
   render() {
+    const { coords, showCoords, contentType, bounds } = this.state;
     return (
       <div>
         <input type="file" ref={(ele) => this.fileInput = ele} />
@@ -43,11 +75,20 @@ export class Chart extends React.Component<TProps, TState> {
           min={0}
           defaultValue={defaultThreshold.toFixed(2)}
         />
+        <input
+          type="checkbox"
+          onChange={(evt) => this.setState({ showCoords: evt.target.checked })}
+          defaultChecked={showCoords}
+        />
         <button onClick={this.loadFile}>Load</button>
-        <div style={{ width: '100%', height: '800px' }}>
-          <canvas id="myChart" ref={(ele) => this.canvas = ele} />
-        </div>
-        {this.state.coords.length > 0 && <table>
+        <select value={contentType} onChange={(evt) => this.setState({ contentType: evt.target.value })}>
+          <option value="profile">Profile</option>
+          <option value="table">Table</option>
+          <option value="gradients">Gradients</option>
+        </select>
+        {contentType === 'gradients' &&
+          <Gradient bounds={bounds} onChange={(bds) => this.setState({ bounds: bds })} />}
+        {contentType === 'table' && coords.length > 0 && <table>
           <thead>
             <tr>
               <td>Latitude</td>
@@ -59,9 +100,12 @@ export class Chart extends React.Component<TProps, TState> {
             </tr>
           </thead>
           <tbody>
-            {this.state.coords.map((c, idx) => <tr
+            {coords.map((c, idx) => <tr
               key={idx}
-              style={{ backgroundColor: c.slope !== undefined ? this.getColorFromSlope(c.slope) : '#FFFFFF' }}
+              style={{
+                backgroundColor: c.slope !== undefined ?
+                  this.getColorFromSlope(this.state.bounds, c.slope) : '#FFFFFF'
+              }}
             >
               <td>{c.lat.toFixed(4)}</td>
               <td>{c.long.toFixed(4)}</td>
@@ -73,20 +117,15 @@ export class Chart extends React.Component<TProps, TState> {
           </tbody>
         </table>
         }
+        <div className={contentType === 'profile' ? classes.chart : classes.hidden} >
+          <canvas id="myChart" ref={(ele) => this.canvas = ele} />
+          <Gradient bounds={bounds} onChange={(bds) => this.setState({ bounds: bds })} />}
+        </div>
       </div>
     );
   }
 
-  private getColorFromSlope = (slope: number) => {
-    const bounds = [
-      { bound: 13, hue: 0, saturation: 0, lightness: 0 },
-      { bound: 12, hue: 0, saturation: 100, lightness: 50 },
-      { bound: 10, hue: 0, saturation: 100, lightness: 50 },
-      { bound: 7, hue: 60, saturation: 100, lightness: 50 },
-      { bound: 3, hue: 60, saturation: 100, lightness: 50 },
-      { bound: 0, hue: 110, saturation: 100, lightness: 50 }
-    ];
-
+  private getColorFromSlope = (bounds: TBound[], slope: number) => {
     const boundIndex = bounds.findIndex(b => b.bound < slope);
     if (boundIndex !== -1) {
       if (boundIndex > 0) {
@@ -108,14 +147,10 @@ export class Chart extends React.Component<TProps, TState> {
     }
   }
 
-  private initializeChart = (nextState: TState) => {
+  private initializeChart = (): ChartJs | null => {
     if (this.canvas) {
       const ctx = this.canvas.getContext('2d');
       if (ctx) {
-        const validData = nextState.coords;
-        const data = validData.map(c => c.altitude || 0);
-        const labels = validData.map(c => c.totalDistance.toFixed(2));
-
         const gradientFill = ctx.createLinearGradient(0, 0, this.canvas.width, 0);
 
         const chart = new ChartJs(
@@ -123,13 +158,13 @@ export class Chart extends React.Component<TProps, TState> {
           {
             type: 'line',
             data: {
-              labels: labels,
+              labels: [],
               datasets: [{
                 borderColor: 'transparent',
                 backgroundColor: gradientFill,
                 borderWidth: 0,
                 pointRadius: 0,
-                data: data,
+                data: [],
                 label: 'Altitude',
                 fill: true
               }]
@@ -143,11 +178,18 @@ export class Chart extends React.Component<TProps, TState> {
           }
         );
         this.setState({ chart });
+
+        return chart;
       }
     }
+
+    return null;
   }
 
-  private assignData = (chart: ChartJs, coordinates: TCoords[]) => {
+  private assignData = (nextState: TState) => {
+    const chart = nextState.chart || this.initializeChart();
+    const coordinates = nextState.coords;
+
     if (chart) {
       if (chart.data && chart.data.datasets && coordinates.length > 0) {
         const courseDistance = coordinates[coordinates.length - 1].totalDistance;
@@ -158,14 +200,17 @@ export class Chart extends React.Component<TProps, TState> {
             coordinates.forEach(coordinate => {
               if (coordinate.slope !== undefined) {
                 const colorStopPosition = coordinate.totalDistance / courseDistance;
-                gradientFill.addColorStop(colorStopPosition, this.getColorFromSlope(coordinate.slope));
+                gradientFill.addColorStop(
+                  colorStopPosition,
+                  this.getColorFromSlope(nextState.bounds, coordinate.slope)
+                );
               }
             });
 
             chart.data.datasets[0].backgroundColor = gradientFill;
           }
         }
-        chart.data.labels = coordinates.map(c => c.totalDistance.toFixed(2));
+        chart.data.labels = coordinates.map(c => c.totalDistance.toFixed(1));
         chart.data.datasets[0].data = coordinates.map(c => c.altitude || 0);
       }
       chart.resize();
@@ -179,9 +224,7 @@ export class Chart extends React.Component<TProps, TState> {
         const result = fr.result;
 
         const coords = smoothenCoordinates(result, this.thresholdInput ? parseFloat(this.thresholdInput.value) : 0.5);
-        if (this.state.chart) {
-          this.assignData(this.state.chart, coords);
-        }
+        // this.assignData(coords);
         this.setState({ coords });
       };
 

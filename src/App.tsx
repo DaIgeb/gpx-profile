@@ -3,7 +3,7 @@ import './App.css';
 
 import { Chart } from './components/Chart';
 
-const logo = require('./logo.svg');
+const logo = require<string>('./logo.svg');
 
 class App extends React.Component<{}, {}> {
   render() {

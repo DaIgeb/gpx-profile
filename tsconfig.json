@@ -15,7 +15,16 @@
     "noImplicitAny": true,
     "strictNullChecks": true,
     "suppressImplicitAnyIndexErrors": true,
-    "noUnusedLocals": true
+    "noUnusedLocals": true,
+    "typeRoots": [
+      "node_modules/@types",
+      "src/typings.d.ts"
+    ],
+    "types": [
+      "webpack-env",
+      "chai",
+      "mocha"
+    ]
   },
   "exclude": [
     "node_modules",

@@ -23,3 +23,5 @@ type TGeoJson = TFeatureCollection | TLineString;
 declare module "togeojson" {
   export const gpx: (doc: Document) => TGeoJson;
 }
+
+declare const process: any;

@@ -2,6 +2,7 @@
   "name": "elevation-profile-app",
   "version": "0.1.0",
   "private": true,
+  "homepage": "https://gps-tools.d-roth.li",
   "dependencies": {
     "@types/jest": "^20.0.5",
     "@types/node": "^8.0.19",
@@ -12,7 +13,10 @@
     "react-scripts-ts": "2.5.0"
   },
   "devDependencies": {
+    "@types/chai": "^4.0.2",
     "@types/chart.js": "^2.6.1",
+    "@types/mocha": "^2.2.41",
+    "@types/webpack-env": "^1.13.0",
     "@types/xmldom": "^0.1.29",
     "chart.js": "^2.6.0",
     "togeojson": "^0.16.0",
