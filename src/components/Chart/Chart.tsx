@@ -43,7 +43,6 @@ export class Chart extends React.Component<TProps, TState> {
             });
 
             chart.data.datasets[0].backgroundColor = gradientFill;
-            // chart.data.datasets[0].borderColor = gradientFill;
           }
         }
         chart.data.labels = nextState.coords.map(c => c.totalDistance.toFixed(2));
