@@ -3,10 +3,8 @@ import * as ChartJs from 'chart.js';
 
 import { smoothenCoordinates, TCoords } from './smooth';
 
-type TProps = {
-};
+type TProps = {};
 type TState = { coords: TCoords[]; chart?: ChartJs; };
-
 const defaultThreshold = 0.1;
 
 export class Chart extends React.Component<TProps, TState> {
@@ -29,29 +27,8 @@ export class Chart extends React.Component<TProps, TState> {
 
   componentWillUpdate(nextProps: TProps, nextState: TState) {
     const chart = nextState.chart;
-    if (chart) {
-      if (chart.data && chart.data.datasets && nextState.coords.length > 0) {
-        const courseDistance = nextState.coords[nextState.coords.length - 1].totalDistance;
-        if (this.canvas) {
-          const ctx = this.canvas.getContext('2d');
-          if (ctx) {
-            const gradientFill = ctx.createLinearGradient(0, 0, ctx.canvas.width, 0);
-            nextState.coords.forEach(coord => {
-              if (coord.slope !== undefined) {
-                gradientFill.addColorStop(coord.totalDistance / courseDistance, this.getColorFromSlope(coord.slope));
-              }
-            });
-
-            chart.data.datasets[0].backgroundColor = gradientFill;
-          }
-        }
-        chart.data.labels = nextState.coords.map(c => c.totalDistance.toFixed(2));
-        chart.data.datasets[0].data = nextState.coords.map(c => c.altitude || 0);
-      }
-      chart.resize();
-      chart.update();
-    } else {
-      this.initializeChart(nextProps, nextState);
+    if (!chart) {
+      this.initializeChart(nextState);
     }
   }
 
@@ -131,7 +108,7 @@ export class Chart extends React.Component<TProps, TState> {
     }
   }
 
-  private initializeChart = (nextProps: TProps, nextState: TState) => {
+  private initializeChart = (nextState: TState) => {
     if (this.canvas) {
       const ctx = this.canvas.getContext('2d');
       if (ctx) {
@@ -139,7 +116,7 @@ export class Chart extends React.Component<TProps, TState> {
         const data = validData.map(c => c.altitude || 0);
         const labels = validData.map(c => c.totalDistance.toFixed(2));
 
-        const gradientFill = ctx.createLinearGradient(500, 0, 100, 0);
+        const gradientFill = ctx.createLinearGradient(0, 0, this.canvas.width, 0);
 
         const chart = new ChartJs(
           ctx,
@@ -170,12 +147,41 @@ export class Chart extends React.Component<TProps, TState> {
     }
   }
 
+  private assignData = (chart: ChartJs, coordinates: TCoords[]) => {
+    if (chart) {
+      if (chart.data && chart.data.datasets && coordinates.length > 0) {
+        const courseDistance = coordinates[coordinates.length - 1].totalDistance;
+        if (this.canvas) {
+          const ctx = this.canvas.getContext('2d');
+          if (ctx) {
+            const gradientFill = ctx.createLinearGradient(0, 0, ctx.canvas.width, 0);
+            coordinates.forEach(coordinate => {
+              if (coordinate.slope !== undefined) {
+                const colorStopPosition = coordinate.totalDistance / courseDistance;
+                gradientFill.addColorStop(colorStopPosition, this.getColorFromSlope(coordinate.slope));
+              }
+            });
+
+            chart.data.datasets[0].backgroundColor = gradientFill;
+          }
+        }
+        chart.data.labels = coordinates.map(c => c.totalDistance.toFixed(2));
+        chart.data.datasets[0].data = coordinates.map(c => c.altitude || 0);
+      }
+      chart.resize();
+      chart.update();
+    }
+  }
+
   private loadFile = () => {
     if (this.fileInput && this.fileInput.files && this.fileInput.files.length > 0) {
       const receivedText = () => {
         const result = fr.result;
 
         const coords = smoothenCoordinates(result, this.thresholdInput ? parseFloat(this.thresholdInput.value) : 0.5);
+        if (this.state.chart) {
+          this.assignData(this.state.chart, coords);
+        }
         this.setState({ coords });
       };
 
