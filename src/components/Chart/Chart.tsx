@@ -11,7 +11,12 @@ const classes = require<{
 }>('./Chart.css');
 
 type TProps = {};
-type TState = { coords: TCoords[]; chart?: ChartJs; showCoords: boolean; contentType: string; bounds: TBound[] };
+type TState = {
+  coords: TCoords[];
+  chart?: ChartJs;
+  contentType: string;
+  bounds: TBound[]
+};
 const defaultThreshold = 0.1;
 const defaultBounds: TBound[] = [
   { bound: 13, hue: 0, saturation: 0, lightness: 0 },
@@ -31,7 +36,7 @@ export class Chart extends React.Component<TProps, TState> {
   constructor(props: TProps) {
     super(props);
 
-    this.state = { coords: [], showCoords: true, contentType: 'profile', bounds: defaultBounds };
+    this.state = { coords: [], contentType: 'profile', bounds: defaultBounds };
   }
 
   componentWillUnmount() {
@@ -64,7 +69,7 @@ export class Chart extends React.Component<TProps, TState> {
   }
 
   render() {
-    const { coords, showCoords, contentType, bounds } = this.state;
+    const { coords, contentType, bounds } = this.state;
     return (
       <div>
         <input type="file" ref={(ele) => this.fileInput = ele} />
@@ -74,11 +79,6 @@ export class Chart extends React.Component<TProps, TState> {
           step={0.05}
           min={0}
           defaultValue={defaultThreshold.toFixed(2)}
-        />
-        <input
-          type="checkbox"
-          onChange={(evt) => this.setState({ showCoords: evt.target.checked })}
-          defaultChecked={showCoords}
         />
         <button onClick={this.loadFile}>Load</button>
         <select value={contentType} onChange={(evt) => this.setState({ contentType: evt.target.value })}>
