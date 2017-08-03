@@ -2,7 +2,7 @@
   "name": "elevation-profile-app",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://gps-tools.d-roth.li",
+  "homepage": "https://gps-tools.cycled.ch",
   "dependencies": {
     "@types/jest": "^20.0.5",
     "@types/node": "^8.0.19",
