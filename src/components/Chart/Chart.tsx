@@ -1,5 +1,5 @@
 import * as React from 'react';
-import * as ChartJs from 'chart.js';
+import { Line } from 'react-chartjs-2';
 
 import { smoothenCoordinates, TCoords } from './smooth';
 import { Gradient, TBound } from './Gradient';
@@ -13,9 +13,9 @@ const classes = require<{
 type TProps = {};
 type TState = {
   coords: TCoords[];
-  chart?: ChartJs;
   contentType: string;
-  bounds: TBound[]
+  bounds: TBound[];
+  width: number;
 };
 const defaultThreshold = 0.1;
 const defaultBounds: TBound[] = [
@@ -31,48 +31,73 @@ const defaultBounds: TBound[] = [
 export class Chart extends React.Component<TProps, TState> {
   private fileInput: HTMLInputElement | null;
   private thresholdInput: HTMLInputElement | null;
-  private canvas: HTMLCanvasElement | null;
 
   constructor(props: TProps) {
     super(props);
 
-    this.state = { coords: [], contentType: 'profile', bounds: defaultBounds };
+    this.state = { coords: [], contentType: 'profile', bounds: defaultBounds, width: window.innerWidth };
+    this.updateWindowDimensions = this.updateWindowDimensions.bind(this);
   }
 
   componentWillUnmount() {
-    const chart = this.state.chart;
-    if (chart) {
-      chart.destroy();
-    }
+    window.removeEventListener('resize', this.updateWindowDimensions);
   }
 
-  componentWillUpdate(nextProps: TProps, nextState: TState) {
-    const chart = nextState.chart;
-    if (!chart) {
-      this.initializeChart();
-      this.assignData(nextState);
-    } else {
-      if (this.state.bounds !== nextState.bounds || this.state.coords !== nextState.coords) {
-        this.assignData(nextState);
-      }
-    }
+  componentDidMount() {
+    this.updateWindowDimensions();
+    window.addEventListener('resize', this.updateWindowDimensions);
   }
 
-  componentDidUpdate(nextProps: TProps, nextState: TState) {
-    const chart = nextState.chart;
-    if (chart) {
-      if (this.state.contentType !== nextState.contentType) {
-        chart.resize();
-        chart.update();
-      }
-    }
+  updateWindowDimensions = () => {
+    this.setState({ width: window.innerWidth });
   }
 
   render() {
-    const { coords, contentType, bounds } = this.state;
+    const { coords, contentType, bounds, width } = this.state;
+
+    const height = 200 * width / 600;
+
+    const buildGradient = (canvas: HTMLCanvasElement) => {
+      if (coords.length > 0) {
+        const courseDistance = coords[coords.length - 1].totalDistance;
+
+        if (canvas) {
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            const fill = ctx.createLinearGradient(35, 0, width, 0);
+            coords.forEach(coordinate => {
+              if (coordinate.slope !== undefined) {
+                const colorStopPosition = coordinate.totalDistance / courseDistance;
+                fill.addColorStop(
+                  colorStopPosition,
+                  this.getColorFromSlope(bounds, coordinate.slope)
+                );
+              }
+            });
+            return fill;
+          }
+        }
+      }
+
+      return undefined;
+    };
+
+    const chartData = (canvas: HTMLCanvasElement) => ({
+      labels: coords.map(c => c.totalDistance.toFixed(1)),
+      datasets: [{
+        borderColor: 'transparent',
+        backgroundColor: buildGradient(canvas),
+        borderWidth: 0,
+        pointRadius: 0,
+        data: coords.map(c => c.altitude || 0),
+        label: 'Altitude',
+        fill: true
+      }]
+    });
+
     return (
       <div>
-        <input type="file" ref={(ele) => this.fileInput = ele} />
+        <input type="file" ref={(ele) => this.fileInput = ele} onChange={this.loadFile} />
         <input
           type="number"
           ref={(ele) => this.thresholdInput = ele}
@@ -80,7 +105,6 @@ export class Chart extends React.Component<TProps, TState> {
           min={0}
           defaultValue={defaultThreshold.toFixed(2)}
         />
-        <button onClick={this.loadFile}>Load</button>
         <select value={contentType} onChange={(evt) => this.setState({ contentType: evt.target.value })}>
           <option value="profile">Profile</option>
           <option value="table">Table</option>
@@ -118,7 +142,16 @@ export class Chart extends React.Component<TProps, TState> {
         </table>
         }
         <div className={contentType === 'profile' ? classes.chart : classes.hidden} >
-          <canvas id="myChart" ref={(ele) => this.canvas = ele} />
+          <Line
+            height={height}
+            width={width}
+            data={chartData}
+            options={{
+              legend: {
+                display: false
+              }
+            }}
+          />
           <Gradient bounds={bounds} onChange={(bds) => this.setState({ bounds: bds })} />
         </div>
       </div>
@@ -144,77 +177,6 @@ export class Chart extends React.Component<TProps, TState> {
     } else {
       const lastBound = bounds[bounds.length - 1];
       return `hsla(${lastBound.hue}, ${lastBound.saturation}%, ${lastBound.lightness}%, 0.6)`;
-    }
-  }
-
-  private initializeChart = (): ChartJs | null => {
-    if (this.canvas) {
-      const ctx = this.canvas.getContext('2d');
-      if (ctx) {
-        const gradientFill = ctx.createLinearGradient(0, 0, this.canvas.width, 0);
-
-        const chart = new ChartJs(
-          ctx,
-          {
-            type: 'line',
-            data: {
-              labels: [],
-              datasets: [{
-                borderColor: 'transparent',
-                backgroundColor: gradientFill,
-                borderWidth: 0,
-                pointRadius: 0,
-                data: [],
-                label: 'Altitude',
-                fill: true
-              }]
-            },
-            options: {
-              legend: {
-                display: false
-              },
-              maintainAspectRatio: false
-            }
-          }
-        );
-        this.setState({ chart });
-
-        return chart;
-      }
-    }
-
-    return null;
-  }
-
-  private assignData = (nextState: TState) => {
-    const chart = nextState.chart || this.initializeChart();
-    const coordinates = nextState.coords;
-
-    if (chart) {
-      if (chart.data && chart.data.datasets && coordinates.length > 0) {
-        const courseDistance = coordinates[coordinates.length - 1].totalDistance;
-        if (this.canvas) {
-          const ctx = this.canvas.getContext('2d');
-          if (ctx) {
-            const gradientFill = ctx.createLinearGradient(0, 0, ctx.canvas.width, 0);
-            coordinates.forEach(coordinate => {
-              if (coordinate.slope !== undefined) {
-                const colorStopPosition = coordinate.totalDistance / courseDistance;
-                gradientFill.addColorStop(
-                  colorStopPosition,
-                  this.getColorFromSlope(nextState.bounds, coordinate.slope)
-                );
-              }
-            });
-
-            chart.data.datasets[0].backgroundColor = gradientFill;
-          }
-        }
-        chart.data.labels = coordinates.map(c => c.totalDistance.toFixed(1));
-        chart.data.datasets[0].data = coordinates.map(c => c.altitude || 0);
-      }
-      chart.resize();
-      chart.update();
     }
   }
 
