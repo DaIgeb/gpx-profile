@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Line } from 'react-chartjs-2';
 
-import { smoothenCoordinates, TCoords } from './smooth';
+import { smoothenCoordinates, TPoint, TTotalDistance } from './smooth';
 import { Gradient, TBound } from './Gradient';
 
 const classes = require<{
@@ -12,7 +12,7 @@ const classes = require<{
 
 type TProps = {};
 type TState = {
-  coords: TCoords[];
+  coords: TTotalDistance<TPoint>[];
   contentType: string;
   bounds: TBound[];
   width: number;
@@ -64,8 +64,8 @@ export class Chart extends React.Component<TProps, TState> {
         if (canvas) {
           const ctx = canvas.getContext('2d');
           if (ctx) {
-            const fill = ctx.createLinearGradient(35, 0, width, 0);
-            coords.forEach(coordinate => {
+            const fill = ctx.createLinearGradient(35, 0, width - 30, 0);
+            coords.forEach((coordinate, idx) => {
               if (coordinate.slope !== undefined) {
                 const colorStopPosition = coordinate.totalDistance / courseDistance;
                 fill.addColorStop(
@@ -82,18 +82,20 @@ export class Chart extends React.Component<TProps, TState> {
       return undefined;
     };
 
-    const chartData = (canvas: HTMLCanvasElement) => ({
-      labels: coords.map(c => c.totalDistance.toFixed(1)),
-      datasets: [{
-        borderColor: 'transparent',
-        backgroundColor: buildGradient(canvas),
-        borderWidth: 0,
-        pointRadius: 0,
-        data: coords.map(c => c.altitude || 0),
-        label: 'Altitude',
-        fill: true
-      }]
-    });
+    const chartData = (canvas: HTMLCanvasElement) => {
+      return {
+        labels: coords.map(c => c.totalDistance.toFixed(1)),
+        datasets: [{
+          borderColor: 'transparent',
+          backgroundColor: buildGradient(canvas),
+          borderWidth: 0,
+          pointRadius: 0,
+          data: coords.map(c => c.altitude || 0),
+          label: 'Altitude',
+          fill: true
+        }]
+      };
+    };
 
     return (
       <div>
@@ -104,6 +106,7 @@ export class Chart extends React.Component<TProps, TState> {
           step={0.05}
           min={0}
           defaultValue={defaultThreshold.toFixed(2)}
+          onChange={this.loadFile}
         />
         <select value={contentType} onChange={(evt) => this.setState({ contentType: evt.target.value })}>
           <option value="profile">Profile</option>
@@ -115,8 +118,6 @@ export class Chart extends React.Component<TProps, TState> {
         {contentType === 'table' && coords.length > 0 && <table>
           <thead>
             <tr>
-              <td>Latitude</td>
-              <td>Longitude</td>
               <td>Altitude</td>
               <td>Slope</td>
               <td>Distance</td>
@@ -131,8 +132,6 @@ export class Chart extends React.Component<TProps, TState> {
                   this.getColorFromSlope(this.state.bounds, c.slope) : '#FFFFFF'
               }}
             >
-              <td>{c.lat.toFixed(4)}</td>
-              <td>{c.long.toFixed(4)}</td>
               <td>{c.altitude !== undefined ? c.altitude.toFixed(0) : 'none'}</td>
               <td>{c.slope !== undefined ? c.slope.toFixed(1) : 'none'}</td>
               <td>{c.distance}</td>
@@ -149,6 +148,14 @@ export class Chart extends React.Component<TProps, TState> {
             options={{
               legend: {
                 display: false
+              },
+              scales: {
+                yAxes: [{
+                  ticks: {
+                    suggestedMin: 500,
+                    suggestedMax: 1700
+                  }
+                }]
               }
             }}
           />
@@ -184,9 +191,9 @@ export class Chart extends React.Component<TProps, TState> {
     if (this.fileInput && this.fileInput.files && this.fileInput.files.length > 0) {
       const receivedText = () => {
         const result = fr.result;
+        const threshold = this.thresholdInput ? parseFloat(this.thresholdInput.value) : 0.5;
 
-        const coords = smoothenCoordinates(result, this.thresholdInput ? parseFloat(this.thresholdInput.value) : 0.5);
-        // this.assignData(coords);
+        const coords = smoothenCoordinates(result, isNaN(threshold) ? 0.5 : threshold);
         this.setState({ coords });
       };
 

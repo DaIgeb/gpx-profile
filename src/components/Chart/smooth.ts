@@ -1,7 +1,7 @@
 import { gpx } from 'togeojson';
 import { DOMParser } from 'xmldom';
 
-export const smoothenCoordinates = (xmlString: string, distanceThreshold: number): TCoords[] => {
+export const smoothenCoordinates = (xmlString: string, distanceThreshold: number): TTotalDistance<TPoint>[] => {
   const gpxFile = new DOMParser().parseFromString(xmlString);
   const geoJson: TGeoJson = gpx(gpxFile);
 
@@ -15,52 +15,100 @@ export const smoothenCoordinates = (xmlString: string, distanceThreshold: number
         if (current.type === 'Feature') {
           const geometry = current.geometry;
           if (geometry.type === 'LineString') {
-            const coordinatesSmoothened = geometry.coordinates.reduce<TCoords[]>(
-              (coordList, curCoords) => {
-                if (coordList.length === 0) {
-                  return [
-                    ...coordList,
-                    {
-                      lat: curCoords[1],
-                      long: curCoords[0],
-                      distance: 0,
-                      totalDistance: 0,
-                      altitude: curCoords.length > 2 ? curCoords[2] : undefined,
-                      slope: curCoords.length > 2 ? 0 : undefined
-                    }
-                  ];
-                }
+            const points: TInternalPoint[] = geometry.coordinates.map<TInternalPoint>(point => ({
+              lat: point[1],
+              long: point[0],
+              altitude: point.length > 2 ? point[2] : undefined,
+            }));
+            const pointsWithDistance = points.map((point, idx) => {
+              if (idx === 0) {
+                return {
+                  ...point,
+                  distance: 0,
+                  elevation: 0
+                };
+              }
 
-                const previousCoords = coordList[coordList.length - 1];
+              const pp = points[idx - 1];
+              const elevation = pp.altitude && point.altitude ?
+                point.altitude - (pp.altitude || 0) :
+                undefined;
 
-                const distance = getDistanceFromLatLonInKm(
-                  curCoords[1],
-                  curCoords[0],
-                  previousCoords.lat,
-                  previousCoords.long
-                );
-                if (distance < distanceThreshold) {
-                  return coordList;
-                }
+              return {
+                ...point,
+                distance: getDistanceFromLatLonInKm(
+                  point.lat,
+                  point.long,
+                  pp.lat,
+                  pp.long
+                ),
+                elevation
+              };
+            });
 
-                const elevation = curCoords.length > 2 ? curCoords[2] - (previousCoords.altitude || 0) : undefined;
+            if (distanceThreshold === 0) {
+              return addTotalDistance(pointsWithDistance.map((point, idx) => ({
+                distance: point.distance,
+                altitude: point.altitude,
+                slope: point.distance !== 0 ?
+                  (point.elevation !== undefined ? Math.abs(point.elevation / point.distance / 10) : undefined)
+                  : 0
+              })));
+            }
 
-                return [
-                  ...coordList,
-                  {
-                    lat: curCoords[1],
-                    long: curCoords[0],
-                    distance: distance,
-                    totalDistance: previousCoords.totalDistance + distance,
-                    altitude: curCoords.length > 2 ? curCoords[2] : undefined,
-                    slope: elevation !== undefined ? Math.abs(elevation) / distance / 10 : undefined
-                  }
-                ];
-              },
-              []
-            );
+            let previousPoint: TPoint = {
+              distance: 0,
+              altitude: pointsWithDistance[0].altitude,
+              slope: 0
+            };
 
-            return coordinatesSmoothened;
+            const smoothenedPoints: TPoint[] = [previousPoint];
+
+            let distance = 0;
+            let climbing = 0;
+            for (let i = 1; i < pointsWithDistance.length; i++) {
+              const currentPoint = pointsWithDistance[i];
+              distance += currentPoint.distance;
+              climbing += currentPoint.elevation || 0;
+
+              if (distance === distanceThreshold) {
+                previousPoint = {
+                  distance: distanceThreshold,
+                  altitude: currentPoint.altitude,
+                  slope: Math.abs(climbing / distanceThreshold / 10)
+                };
+
+                smoothenedPoints.push(previousPoint);
+
+                distance = 0;
+                climbing = 0;
+              } else if (distance > distanceThreshold) {
+                const additionalPoints = createPoints(distance, climbing, currentPoint.altitude, distanceThreshold);
+
+                previousPoint = additionalPoints[additionalPoints.length - 1];
+
+                smoothenedPoints.push(...additionalPoints);
+
+                const climbingExcess =
+                  (currentPoint.elevation || 0) -
+                  (currentPoint.elevation || 0) / distance * additionalPoints.length * distanceThreshold;
+
+                distance = distance - additionalPoints.length * distanceThreshold;
+                climbing = climbingExcess;
+              }
+            }
+
+            if (distance > 0) {
+              previousPoint = {
+                distance: distanceThreshold,
+                altitude: pointsWithDistance[pointsWithDistance.length - 1].altitude,
+                slope: Math.abs(climbing / distance / 10)
+              };
+
+              smoothenedPoints.push(previousPoint);
+            }
+
+            return addTotalDistance(smoothenedPoints);
           }
         }
 
@@ -73,16 +121,64 @@ export const smoothenCoordinates = (xmlString: string, distanceThreshold: number
   return [];
 };
 
+const createPoints = (distance: number, climbing: number, baseAltitude: number | undefined, threshold: number)
+  : TPoint[] => {
+  let remainingDistance = distance;
+  const gradient = climbing / distance;
+  const slope = Math.abs(gradient / 10);
+  const result: TPoint[] = [];
+  while (threshold < remainingDistance) {
+    result.push({
+      distance: threshold,
+      altitude: baseAltitude ? baseAltitude + result.length * gradient * threshold : undefined,
+      slope
+    });
+    remainingDistance -= threshold;
+  }
+
+  return result;
+};
+
+type TDistance<T> = T & {
+  distance: number;
+};
+
+export type TTotalDistance<T> = TDistance<T> & {
+  totalDistance: number;
+};
+
+const addTotalDistance = <T>(distances: TDistance<T>[]): TTotalDistance<T>[] => {
+  return distances.reduce<TTotalDistance<T>[]>(
+    (prev, cur) => {
+      if (prev.length > 0) {
+        const previous = prev[prev.length - 1];
+        return [
+          ...prev,
+          Object.assign(cur, { totalDistance: previous.totalDistance + cur.distance })
+        ];
+      }
+
+      return [
+        ...prev,
+        Object.assign(cur, { totalDistance: 0 })
+      ];
+    },
+    []
+  );
+};
+
 const deg2radFactor = Math.PI / 180;
 const R = 6371; // Radius of the earth in km
 
-export type TCoords = {
-  lat: number;
-  long: number;
-  distance: number;
-  totalDistance: number;
+export type TPoint = TDistance<{
   altitude?: number;
   slope?: number;
+}>;
+
+type TInternalPoint = {
+  lat: number;
+  long: number;
+  altitude?: number;
 };
 
 function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
