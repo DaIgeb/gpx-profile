@@ -53,8 +53,31 @@ export class Chart extends React.Component<TProps, TState> {
   }
 
   render() {
-    const { coords, contentType, bounds, width } = this.state;
+    const { contentType } = this.state;
 
+    return (
+      <div>
+        <input type="file" ref={(ele) => this.fileInput = ele} onChange={this.loadFile} />
+        <input
+          type="number"
+          ref={(ele) => this.thresholdInput = ele}
+          step={0.05}
+          min={0}
+          defaultValue={defaultThreshold.toFixed(2)}
+          onChange={this.loadFile}
+        />
+        <select value={contentType} onChange={(evt) => this.setState({ contentType: evt.target.value })}>
+          <option value="profile">Profile</option>
+          <option value="table">Table</option>
+        </select>
+        {contentType === 'table' && this.renderTable()}
+        {this.renderProfile()}
+      </div>
+    );
+  }
+
+  private renderProfile = () => {
+    const { contentType, width, coords, bounds } = this.state;
     const height = 200 * width / 600;
 
     const buildGradient = (canvas: HTMLCanvasElement) => {
@@ -98,70 +121,56 @@ export class Chart extends React.Component<TProps, TState> {
     };
 
     return (
-      <div>
-        <input type="file" ref={(ele) => this.fileInput = ele} onChange={this.loadFile} />
-        <input
-          type="number"
-          ref={(ele) => this.thresholdInput = ele}
-          step={0.05}
-          min={0}
-          defaultValue={defaultThreshold.toFixed(2)}
-          onChange={this.loadFile}
+      <div className={contentType === 'profile' ? classes.chart : classes.hidden} >
+        <Line
+          height={height}
+          width={width}
+          data={chartData}
+          options={{
+            legend: {
+              display: false
+            },
+            scales: {
+              yAxes: [{
+                ticks: {
+                  suggestedMin: 500,
+                  suggestedMax: 1700
+                }
+              }]
+            }
+          }}
         />
-        <select value={contentType} onChange={(evt) => this.setState({ contentType: evt.target.value })}>
-          <option value="profile">Profile</option>
-          <option value="table">Table</option>
-          <option value="gradients">Gradients</option>
-        </select>
-        {contentType === 'gradients' &&
-          <Gradient bounds={bounds} onChange={(bds) => this.setState({ bounds: bds })} />}
-        {contentType === 'table' && coords.length > 0 && <table>
-          <thead>
-            <tr>
-              <td>Altitude</td>
-              <td>Slope</td>
-              <td>Distance</td>
-              <td>Total Distance</td>
-            </tr>
-          </thead>
-          <tbody>
-            {coords.map((c, idx) => <tr
-              key={idx}
-              style={{
-                backgroundColor: c.slope !== undefined ?
-                  this.getColorFromSlope(this.state.bounds, c.slope) : '#FFFFFF'
-              }}
-            >
-              <td>{c.altitude !== undefined ? c.altitude.toFixed(0) : 'none'}</td>
-              <td>{c.slope !== undefined ? c.slope.toFixed(1) : 'none'}</td>
-              <td>{c.distance}</td>
-              <td>{c.totalDistance}</td>
-            </tr>)}
-          </tbody>
-        </table>
-        }
-        <div className={contentType === 'profile' ? classes.chart : classes.hidden} >
-          <Line
-            height={height}
-            width={width}
-            data={chartData}
-            options={{
-              legend: {
-                display: false
-              },
-              scales: {
-                yAxes: [{
-                  ticks: {
-                    suggestedMin: 500,
-                    suggestedMax: 1700
-                  }
-                }]
-              }
-            }}
-          />
-          <Gradient bounds={bounds} onChange={(bds) => this.setState({ bounds: bds })} />
-        </div>
+        <Gradient bounds={bounds} onChange={(bds) => this.setState({ bounds: bds })} />
       </div>
+    );
+  }
+  private renderTable = () => {
+    const { coords } = this.state;
+    return (
+      <table>
+        <thead>
+          <tr>
+            <td>Altitude</td>
+            <td>Slope</td>
+            <td>Distance</td>
+            <td>Total Distance</td>
+          </tr>
+        </thead>
+        <tbody>
+          {coords.map((c, idx) => <tr
+            key={idx}
+            style={{
+              backgroundColor: c.slope !== undefined ?
+                this.getColorFromSlope(this.state.bounds, c.slope) : '#FFFFFF'
+            }}
+          >
+            <td>{c.altitude !== undefined ? c.altitude.toFixed(0) : 'none'}</td>
+            <td>{c.slope !== undefined ? c.slope.toFixed(1) : 'none'}</td>
+            <td>{c.distance}</td>
+            <td>{c.totalDistance}</td>
+          </tr>)}
+        </tbody>
+      </table>
     );
   }
 
