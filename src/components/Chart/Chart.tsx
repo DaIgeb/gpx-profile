@@ -19,8 +19,8 @@ type TState = {
 };
 const defaultThreshold = 0.1;
 const defaultBounds: TBound[] = [
-  { bound: 13, hue: 0, saturation: 0, lightness: 0 },
-  { bound: 12, hue: 0, saturation: 100, lightness: 50 },
+  { bound: 15, hue: 0, saturation: 0, lightness: 0 },
+  { bound: 13.5, hue: 0, saturation: 100, lightness: 50 },
   { bound: 10, hue: 0, saturation: 100, lightness: 50 },
   { bound: 8, hue: 40, saturation: 100, lightness: 50 },
   { bound: 5, hue: 60, saturation: 100, lightness: 50 },

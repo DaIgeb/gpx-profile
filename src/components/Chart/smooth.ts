@@ -15,100 +15,7 @@ export const smoothenCoordinates = (xmlString: string, distanceThreshold: number
         if (current.type === 'Feature') {
           const geometry = current.geometry;
           if (geometry.type === 'LineString') {
-            const points: TInternalPoint[] = geometry.coordinates.map<TInternalPoint>(point => ({
-              lat: point[1],
-              long: point[0],
-              altitude: point.length > 2 ? point[2] : undefined,
-            }));
-            const pointsWithDistance = points.map((point, idx) => {
-              if (idx === 0) {
-                return {
-                  ...point,
-                  distance: 0,
-                  elevation: 0
-                };
-              }
-
-              const pp = points[idx - 1];
-              const elevation = pp.altitude && point.altitude ?
-                point.altitude - (pp.altitude || 0) :
-                undefined;
-
-              return {
-                ...point,
-                distance: getDistanceFromLatLonInKm(
-                  point.lat,
-                  point.long,
-                  pp.lat,
-                  pp.long
-                ),
-                elevation
-              };
-            });
-
-            if (distanceThreshold === 0) {
-              return addTotalDistance(pointsWithDistance.map((point, idx) => ({
-                distance: point.distance,
-                altitude: point.altitude,
-                slope: point.distance !== 0 ?
-                  (point.elevation !== undefined ? Math.abs(point.elevation / point.distance / 10) : undefined)
-                  : 0
-              })));
-            }
-
-            let previousPoint: TPoint = {
-              distance: 0,
-              altitude: pointsWithDistance[0].altitude,
-              slope: 0
-            };
-
-            const smoothenedPoints: TPoint[] = [previousPoint];
-
-            let distance = 0;
-            let climbing = 0;
-            for (let i = 1; i < pointsWithDistance.length; i++) {
-              const currentPoint = pointsWithDistance[i];
-              distance += currentPoint.distance;
-              climbing += currentPoint.elevation || 0;
-
-              if (distance === distanceThreshold) {
-                previousPoint = {
-                  distance: distanceThreshold,
-                  altitude: currentPoint.altitude,
-                  slope: Math.abs(climbing / distanceThreshold / 10)
-                };
-
-                smoothenedPoints.push(previousPoint);
-
-                distance = 0;
-                climbing = 0;
-              } else if (distance > distanceThreshold) {
-                const additionalPoints = createPoints(distance, climbing, currentPoint.altitude, distanceThreshold);
-
-                previousPoint = additionalPoints[additionalPoints.length - 1];
-
-                smoothenedPoints.push(...additionalPoints);
-
-                const climbingExcess =
-                  (currentPoint.elevation || 0) -
-                  (currentPoint.elevation || 0) / distance * additionalPoints.length * distanceThreshold;
-
-                distance = distance - additionalPoints.length * distanceThreshold;
-                climbing = climbingExcess;
-              }
-            }
-
-            if (distance > 0) {
-              previousPoint = {
-                distance: distanceThreshold,
-                altitude: pointsWithDistance[pointsWithDistance.length - 1].altitude,
-                slope: Math.abs(climbing / distance / 10)
-              };
-
-              smoothenedPoints.push(previousPoint);
-            }
-
-            return addTotalDistance(smoothenedPoints);
+            return mapLineString(geometry, distanceThreshold);
           }
         }
 
@@ -121,20 +28,116 @@ export const smoothenCoordinates = (xmlString: string, distanceThreshold: number
   return [];
 };
 
-const createPoints = (distance: number, climbing: number, baseAltitude: number | undefined, threshold: number)
+const mapLineString = (geometry: TLineString, distanceThreshold: number): TTotalDistance<TPoint>[] => {
+  const pointsWithDistance = geometry.coordinates
+    .map<TInternalPoint>(point => ({
+      lat: point[1],
+      long: point[0],
+      altitude: point.length > 2 ? point[2] : undefined,
+    }))
+    .map((point, idx, points) => {
+      if (idx === 0) {
+        return {
+          ...point,
+          distance: 0,
+          elevation: 0
+        };
+      }
+
+      const pp = points[idx - 1];
+      const elevation = pp.altitude && point.altitude ?
+        point.altitude - (pp.altitude || 0) :
+        undefined;
+
+      return {
+        ...point,
+        distance: getDistanceFromLatLonInKm(
+          point.lat,
+          point.long,
+          pp.lat,
+          pp.long
+        ),
+        elevation
+      };
+    });
+
+  if (distanceThreshold === 0) {
+    return addTotalDistance(pointsWithDistance.map((point, idx) => ({
+      distance: point.distance,
+      altitude: point.altitude,
+      slope: point.distance !== 0 ?
+        (point.elevation !== undefined ? Math.abs(point.elevation / point.distance / 10) : undefined)
+        : 0
+    })));
+  }
+
+  let previousPoint: TPoint = {
+    distance: 0,
+    altitude: pointsWithDistance[0].altitude,
+    slope: 0
+  };
+
+  const smoothenedPoints: TPoint[] = [previousPoint];
+
+  let distance = 0;
+  let climbing = 0;
+  for (let i = 1; i < pointsWithDistance.length; i++) {
+    const currentPoint = pointsWithDistance[i];
+    distance += currentPoint.distance;
+    climbing += currentPoint.elevation || 0;
+
+    if (distance === distanceThreshold) {
+      previousPoint = {
+        distance: distanceThreshold,
+        altitude: currentPoint.altitude,
+        slope: Math.abs(climbing / distanceThreshold / 10)
+      };
+
+      smoothenedPoints.push(previousPoint);
+
+      distance = 0;
+      climbing = 0;
+    } else if (distance > distanceThreshold) {
+      const additionalPoints = inflate(distance, climbing, previousPoint.altitude, distanceThreshold);
+
+      previousPoint = additionalPoints[additionalPoints.length - 1];
+
+      smoothenedPoints.push(...additionalPoints);
+
+      const climbingExcess =
+        (currentPoint.elevation || 0) -
+        (currentPoint.elevation || 0) / distance * additionalPoints.length * distanceThreshold;
+
+      distance = distance - additionalPoints.length * distanceThreshold;
+      climbing = climbingExcess;
+    }
+  }
+
+  if (distance > 0) {
+    previousPoint = {
+      distance: distanceThreshold,
+      altitude: pointsWithDistance[pointsWithDistance.length - 1].altitude,
+      slope: Math.abs(climbing / distance / 10)
+    };
+
+    smoothenedPoints.push(previousPoint);
+  }
+
+  return addTotalDistance(smoothenedPoints);
+};
+
+export const inflate = (distance: number, climbing: number, baseAltitude: number | undefined, threshold: number)
   : TPoint[] => {
-  let remainingDistance = distance;
   const gradient = climbing / distance;
   const slope = Math.abs(gradient / 10);
   const result: TPoint[] = [];
-  while (threshold < remainingDistance) {
+  do {
     result.push({
       distance: threshold,
-      altitude: baseAltitude ? baseAltitude + result.length * gradient * threshold : undefined,
+      altitude: baseAltitude ? baseAltitude + (result.length + 1) * gradient * threshold : undefined,
       slope
     });
-    remainingDistance -= threshold;
-  }
+  } while (result.length * threshold < distance);
 
   return result;
 };

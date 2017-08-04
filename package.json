@@ -19,6 +19,7 @@
     "@types/react-chartjs-2": "^2.0.2",
     "@types/webpack-env": "^1.13.0",
     "@types/xmldom": "^0.1.29",
+    "chai": "^4.1.0",
     "chart.js": "^2.6.0",
     "react-chartjs-2": "^2.5.5",
     "togeojson": "^0.16.0",
