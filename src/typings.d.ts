@@ -9,16 +9,20 @@ type TAnyType = {
 
 type TFeature = {
   type: "Feature";
-  properties: any;
-  geometry: TLineString | TAnyType;
+  properties: {
+    coordTimes: string[];
+    name: string;
+    time: string;
+  };
+  geometry: TLineString;
 }
 
 type TFeatureCollection = {
   type: "FeatureCollection";
-  features: (TFeature | TAnyType)[];
+  features: TFeature[];
 }
 
-type TGeoJson = TFeatureCollection | TLineString;
+type TGeoJson = TFeatureCollection;
 
 declare module "togeojson" {
   export const gpx: (doc: Document) => TGeoJson;

@@ -1,10 +1,4 @@
-import { gpx } from 'togeojson';
-import { DOMParser } from 'xmldom';
-
-export const smoothenCoordinates = (xmlString: string, distanceThreshold: number): TTotalDistance<TPoint>[] => {
-  const gpxFile = new DOMParser().parseFromString(xmlString);
-  const geoJson: TGeoJson = gpx(gpxFile);
-
+export const smoothenCoordinates = (geoJson: TGeoJson, distanceThreshold: number): TTotalDistance<TPoint>[] => {
   if (geoJson.type === 'FeatureCollection') {
     return geoJson.features.reduce(
       (previous, current) => {

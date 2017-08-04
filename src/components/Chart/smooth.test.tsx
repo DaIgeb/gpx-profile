@@ -61,7 +61,7 @@ const smallFile = `<?xml version="1.0" encoding="UTF-8"?>
 `;
 
 it('smoothen without crashing', () => {
-  console.log(JSON.stringify(smoothenCoordinates(smallFile, 0.001));
+  smoothenCoordinates(smallFile, 0.001);
 });
 
 it('smoothen to 0.01', () => {

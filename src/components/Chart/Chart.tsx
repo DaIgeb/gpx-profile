@@ -1,5 +1,7 @@
 import * as React from 'react';
 import { Line } from 'react-chartjs-2';
+import { gpx } from 'togeojson';
+import { DOMParser } from 'xmldom';
 
 import { smoothenCoordinates, TPoint, TTotalDistance } from './smooth';
 import { Gradient, TBound } from './Gradient';
@@ -14,6 +16,7 @@ type TProps = {};
 type TState = {
   coords: TTotalDistance<TPoint>[];
   contentType: string;
+  name: string;
   bounds: TBound[];
   width: number;
 };
@@ -35,7 +38,7 @@ export class Chart extends React.Component<TProps, TState> {
   constructor(props: TProps) {
     super(props);
 
-    this.state = { coords: [], contentType: 'profile', bounds: defaultBounds, width: window.innerWidth };
+    this.state = { coords: [], contentType: 'profile', bounds: defaultBounds, width: window.innerWidth, name: '' };
     this.updateWindowDimensions = this.updateWindowDimensions.bind(this);
   }
 
@@ -53,10 +56,11 @@ export class Chart extends React.Component<TProps, TState> {
   }
 
   render() {
-    const { contentType } = this.state;
+    const { contentType, name } = this.state;
 
     return (
       <div>
+        <h2>{name}</h2>
         <input type="file" ref={(ele) => this.fileInput = ele} onChange={this.loadFile} />
         <input
           type="number"
@@ -202,8 +206,11 @@ export class Chart extends React.Component<TProps, TState> {
         const result = fr.result;
         const threshold = this.thresholdInput ? parseFloat(this.thresholdInput.value) : 0.5;
 
-        const coords = smoothenCoordinates(result, isNaN(threshold) ? 0.5 : threshold);
-        this.setState({ coords });
+        const gpxFile = new DOMParser().parseFromString(result);
+        const geoJson: TGeoJson = gpx(gpxFile);
+
+        const coords = smoothenCoordinates(geoJson, isNaN(threshold) ? 0.5 : threshold);
+        this.setState({ coords, name: geoJson.features[0].properties.name });
       };
 
       const file = this.fileInput.files[0];
