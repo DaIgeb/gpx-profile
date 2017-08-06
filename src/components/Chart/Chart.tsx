@@ -1,5 +1,7 @@
 import * as React from 'react';
 import { Line } from 'react-chartjs-2';
+
+import * as ChartJs from 'chart.js';
 import { gpx } from 'togeojson';
 import { DOMParser } from 'xmldom';
 
@@ -19,10 +21,14 @@ type TState = {
   name: string;
   bounds: TBound[];
   width: number;
+  min: number;
+  max: number;
+  climbing: number;
+  descending: number;
 };
 const defaultThreshold = 0.1;
 const defaultBounds: TBound[] = [
-  { bound: 15, hue: 0, saturation: 0, lightness: 0 },
+  { bound: 15, hue: 0, saturation: 100, lightness: 20 },
   { bound: 13.5, hue: 0, saturation: 100, lightness: 50 },
   { bound: 10, hue: 0, saturation: 100, lightness: 50 },
   { bound: 8, hue: 40, saturation: 100, lightness: 50 },
@@ -31,14 +37,29 @@ const defaultBounds: TBound[] = [
   { bound: 0, hue: 110, saturation: 100, lightness: 50 }
 ];
 
+type TLineChart = Line & {
+  chart_instance: ChartJs & { toBase64Image: () => string } | null;
+};
+
 export class Chart extends React.Component<TProps, TState> {
   private fileInput: HTMLInputElement | null;
   private thresholdInput: HTMLInputElement | null;
+  private chartInstance: TLineChart | null;
 
   constructor(props: TProps) {
     super(props);
 
-    this.state = { coords: [], contentType: 'profile', bounds: defaultBounds, width: window.innerWidth, name: '' };
+    this.state = {
+      coords: [],
+      contentType: 'profile',
+      bounds: defaultBounds,
+      width: window.innerWidth,
+      name: '',
+      min: 0,
+      max: 0,
+      climbing: 0,
+      descending: 0
+    };
     this.updateWindowDimensions = this.updateWindowDimensions.bind(this);
   }
 
@@ -56,24 +77,52 @@ export class Chart extends React.Component<TProps, TState> {
   }
 
   render() {
-    const { contentType, name } = this.state;
+    const { contentType, name, min, max, descending, climbing, coords } = this.state;
 
     return (
       <div>
+        <div>
+          <input type="file" ref={(ele) => this.fileInput = ele} onChange={this.loadFile} />
+          <input
+            type="number"
+            ref={(ele) => this.thresholdInput = ele}
+            step={0.05}
+            min={0}
+            defaultValue={defaultThreshold.toFixed(2)}
+            onChange={this.loadFile}
+          />
+          <select value={contentType} onChange={(evt) => this.setState({ contentType: evt.target.value })}>
+            <option value="profile">Profile</option>
+            <option value="table">Table</option>
+          </select>
+        </div>
         <h2>{name}</h2>
-        <input type="file" ref={(ele) => this.fileInput = ele} onChange={this.loadFile} />
-        <input
-          type="number"
-          ref={(ele) => this.thresholdInput = ele}
-          step={0.05}
-          min={0}
-          defaultValue={defaultThreshold.toFixed(2)}
-          onChange={this.loadFile}
-        />
-        <select value={contentType} onChange={(evt) => this.setState({ contentType: evt.target.value })}>
-          <option value="profile">Profile</option>
-          <option value="table">Table</option>
-        </select>
+        {coords.length > 0 && <div>
+          <table>
+            <tbody>
+              <tr>
+                <td>Min</td>
+                <td>{min}</td>
+              </tr>
+              <tr>
+                <td>Max</td>
+                <td>{max}</td>
+              </tr>
+              <tr>
+                <td>Climbing</td>
+                <td>{climbing}</td>
+              </tr>
+              <tr>
+                <td>Descending</td>
+                <td>{descending}</td>
+              </tr>
+              <tr>
+                <td>Distance</td>
+                <td>{coords[coords.length - 1].totalDistance}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>}
         {contentType === 'table' && this.renderTable()}
         {this.renderProfile()}
       </div>
@@ -91,7 +140,12 @@ export class Chart extends React.Component<TProps, TState> {
         if (canvas) {
           const ctx = canvas.getContext('2d');
           if (ctx) {
-            const fill = ctx.createLinearGradient(35, 0, width - 30, 0);
+            const chartArea = this.chartInstance && this.chartInstance.chart_instance ?
+              this.chartInstance.chart_instance.chartArea :
+              { left: 36, right: width - 5 };
+
+            // width - 5
+            const fill = ctx.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
             coords.forEach((coordinate, idx) => {
               if (coordinate.slope !== undefined) {
                 const colorStopPosition = coordinate.totalDistance / courseDistance;
@@ -130,6 +184,7 @@ export class Chart extends React.Component<TProps, TState> {
           height={height}
           width={width}
           data={chartData}
+          ref={ref => this.chartInstance = ref as TLineChart}
           options={{
             legend: {
               display: false
@@ -145,6 +200,19 @@ export class Chart extends React.Component<TProps, TState> {
           }}
         />
         <Gradient bounds={bounds} onChange={(bds) => this.setState({ bounds: bds })} />
+        {
+          this.chartInstance && this.chartInstance.chart_instance &&
+          <button
+            onClick={() => {
+              if (this.chartInstance && this.chartInstance.chart_instance) {
+                const fileUrl = this.chartInstance.chart_instance.toBase64Image();
+                window.open(fileUrl);
+              }
+            }}
+          >
+            Download Image
+          </button>
+        }
       </div>
     );
   }
@@ -209,8 +277,30 @@ export class Chart extends React.Component<TProps, TState> {
         const gpxFile = new DOMParser().parseFromString(result);
         const geoJson: TGeoJson = gpx(gpxFile);
 
+        const geometry = geoJson.features[0].geometry.coordinates;
+
+        const { min, max, climbing, descending } = geometry.reduce(
+          (prev, cur) => {
+            const altitude = cur[2];
+            return ({
+              min: Math.min(altitude, prev.min),
+              max: Math.max(altitude, prev.max),
+              climbing: prev.climbing + (altitude > prev.altitude ? altitude - prev.altitude : 0),
+              descending: prev.descending + (altitude < prev.altitude ? prev.altitude - altitude : 0),
+              altitude: altitude
+            });
+          },
+          {
+            min: Infinity,
+            max: 0,
+            climbing: 0,
+            descending: 0,
+            altitude: geometry[0][2]
+          }
+        );
+
         const coords = smoothenCoordinates(geoJson, isNaN(threshold) ? 0.5 : threshold);
-        this.setState({ coords, name: geoJson.features[0].properties.name });
+        this.setState({ coords, name: geoJson.features[0].properties.name, min, max, climbing, descending });
       };
 
       const file = this.fileInput.files[0];

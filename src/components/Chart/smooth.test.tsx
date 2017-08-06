@@ -1,5 +1,7 @@
 import { expect } from 'chai';
 
+import { gpx } from 'togeojson';
+import { DOMParser } from 'xmldom';
 import { smoothenCoordinates, inflate } from './smooth';
 
 // tslint:disable-next-line
@@ -60,12 +62,15 @@ const smallFile = `<?xml version="1.0" encoding="UTF-8"?>
 </gpx>
 `;
 
+const gpxFile = new DOMParser().parseFromString(smallFile);
+const geoJson: TGeoJson = gpx(gpxFile);
+
 it('smoothen without crashing', () => {
-  smoothenCoordinates(smallFile, 0.001);
+  smoothenCoordinates(geoJson, 0.001);
 });
 
 it('smoothen to 0.01', () => {
-  const coordinates = smoothenCoordinates(smallFile, 0.01);
+  const coordinates = smoothenCoordinates(geoJson, 0.01);
   expect(coordinates).to.be.an('array');
 });
 

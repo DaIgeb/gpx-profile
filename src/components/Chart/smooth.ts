@@ -60,7 +60,7 @@ const mapLineString = (geometry: TLineString, distanceThreshold: number): TTotal
       distance: point.distance,
       altitude: point.altitude,
       slope: point.distance !== 0 ?
-        (point.elevation !== undefined ? Math.abs(point.elevation / point.distance / 10) : undefined)
+        (point.elevation !== undefined ? point.elevation / point.distance / 10 : undefined)
         : 0
     })));
   }
@@ -84,7 +84,7 @@ const mapLineString = (geometry: TLineString, distanceThreshold: number): TTotal
       previousPoint = {
         distance: distanceThreshold,
         altitude: currentPoint.altitude,
-        slope: Math.abs(climbing / distanceThreshold / 10)
+        slope: climbing / distanceThreshold / 10
       };
 
       smoothenedPoints.push(previousPoint);
@@ -111,7 +111,7 @@ const mapLineString = (geometry: TLineString, distanceThreshold: number): TTotal
     previousPoint = {
       distance: distanceThreshold,
       altitude: pointsWithDistance[pointsWithDistance.length - 1].altitude,
-      slope: Math.abs(climbing / distance / 10)
+      slope: climbing / distance / 10
     };
 
     smoothenedPoints.push(previousPoint);
@@ -123,7 +123,7 @@ const mapLineString = (geometry: TLineString, distanceThreshold: number): TTotal
 export const inflate = (distance: number, climbing: number, baseAltitude: number | undefined, threshold: number)
   : TPoint[] => {
   const gradient = climbing / distance;
-  const slope = Math.abs(gradient / 10);
+  const slope = gradient / 10;
   const result: TPoint[] = [];
   do {
     result.push({
