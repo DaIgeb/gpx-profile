@@ -145,10 +145,11 @@ export class Chart extends React.Component<TProps, TState> {
               { left: 36, right: width - 5 };
 
             // width - 5
-            const fill = ctx.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
+            const fill = ctx.createLinearGradient(chartArea.left + 4, 0, chartArea.right - chartArea.left / 9 * 4, 0);
             coords.forEach((coordinate, idx) => {
               if (coordinate.slope !== undefined) {
-                const colorStopPosition = coordinate.totalDistance / courseDistance;
+                const pointDistance = coordinate.totalDistance;
+                const colorStopPosition = pointDistance / courseDistance;
                 fill.addColorStop(
                   colorStopPosition,
                   this.getColorFromSlope(bounds, coordinate.slope)
